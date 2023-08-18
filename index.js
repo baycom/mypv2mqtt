@@ -121,17 +121,32 @@ const MyPVPayloadParser_1000 = new Parser()
 	.uint16be('Freq', { formatter: (x) => {return x/1000.0;}}) //1064
 	.uint16be('Operation_mode') //1065
 	.uint16be('Access_Level') //1066
-	.uint16be('reserved1_for_ACTHOR_9s') //1067
-	.uint16be('reserved2_for_ACTHOR_9s') //1068
+	.uint16be('UL2') //1067
+	.uint16be('IL2') //1068
 	.uint16be('Meter_Power') //1069
 	.uint16be('Control_type') //1070
 	.uint16be('Pmax_abs') //1071
+	.uint16be('UL3') //1072
+	.uint16be('IL3') //1073
+	.uint16be('Pout1') //1074
+	.uint16be('Pout2') //1075
+	.uint16be('Pout3') //1076
+	.uint16be('Operation_state') //1077
+	.uint32be('Power32') //1078
+	.uint16be('Power_relays') //1080
+	.uint16be('Device_state') //1081
+	.uint16be('Power_device') //1082
+	.uint16be('Solar_device') //1083
+	.uint16be('Grid_device') //1084
+	.uint16be('PWMout') //1085
+//	.seek(2) //1086
+//	.uint32be('Meter_measurement') //1087
 	;
 
 const getMyPVRegisters = async (address) => {
 	try {
 		modbusClient.setID(address);
-                let data = await modbusClient.readHoldingRegisters(1000, 72);
+                let data = await modbusClient.readHoldingRegisters(1000, 86);
                 let state = MyPVPayloadParser_1000.parse(data.buffer);
 
 		if(options.debug) {

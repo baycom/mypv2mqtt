@@ -1,15 +1,18 @@
 var util=require('util');
 var mqtt=require('mqtt');
 var ModbusRTU = require("modbus-serial");
+const request = require('request');
 var Parser = require('binary-parser').Parser;
 const commandLineArgs = require('command-line-args')
 var errorCounter = 0;
+var ACTHOR_serial_number;
 
 const optionDefinitions = [
+	{ name: 'mode', alias: 'M', type: Number, defaultValue: 0 },
 	{ name: 'mqtthost', alias: 'm', type: String, defaultValue: "localhost" },
 	{ name: 'mqttclientid', alias: 'c', type: String, defaultValue: "mypv1Client" },
-	{ name: 'inverterhost', alias: 'i', type: String, defaultValue: "10.0.0.31"},
-	{ name: 'inverterport', alias: 'p', type: String, defaultValue: "502"},
+	{ name: 'mypvhost', alias: 'i', type: String, defaultValue: "10.0.0.31"},
+	{ name: 'mypvport', alias: 'p', type: String, defaultValue: "502"},
         { name: 'address',      alias: 'a', type: Number, multiple:true, defaultValue: [1] },
         { name: 'wait',         alias: 'w', type: Number, defaultValue: 10000 },
         { name: 'debug',        alias: 'd', type: Boolean, defaultValue: false },
@@ -21,26 +24,27 @@ var modbusClient = new ModbusRTU();
 
 modbusClient.setTimeout(1000);
 
-if(options.inverterhost) {
-	modbusClient.connectTCP(options.inverterhost, { port: parseInt(options.inverterport),  debug: true }).catch((error) => {
+
+if(options.mypvhost) {
+	modbusClient.connectTCP(options.mypvhost, { port: parseInt(options.mypvport),  debug: true }).catch((error) => {
 		console.error(error);
 		process.exit(-1);
 	});
-} else if(options.inverterport) {
-	modbusClient.connectRTUBuffered(options.inverterport, { baudRate: 9600, parity: 'none' }).catch((error) => {
+} else if(options.mypvport) {
+	modbusClient.connectRTUBuffered(options.mypvport, { baudRate: 9600, parity: 'none' }).catch((error) => {
 		console.error(error);
 		process.exit(-1);
 	});
 }
+console.log("MyPv MODBUS addr: " + options.address);
 
 console.log("MQTT Host         : " + options.mqtthost);
 console.log("MQTT Client ID    : " + options.mqttclientid);
-console.log("MyPv MODBUS addr: " + options.address);
 
-if(options.inverterhost) {
-	console.log("MyPv host       : " + options.inverterhost + ":" + options.inverterport);
+if(options.mypvhost) {
+	console.log("MyPv host       : " + options.mypvhost + ":" + options.mypvport);
 } else {
-	console.log("MyPv serial port: " + options.inverterport);
+	console.log("MyPv serial port: " + options.mypvport);
 }
 
 var MQTTclient = mqtt.connect("mqtt://"+options.mqtthost,{clientId: options.mqttclientid});
@@ -152,8 +156,9 @@ const getMyPVRegisters = async (address) => {
 		if(options.debug) {
 			console.log(util.inspect(state));
 		}
-		sendMqtt(state.ACTHOR_serial_number, state);
 		errorCounter = 0;
+		ACTHOR_serial_number = state.ACTHOR_serial_number;
+		return state;
 	} catch (e) {
 		if(options.debug) {
 			console.log(e);
@@ -163,7 +168,34 @@ const getMyPVRegisters = async (address) => {
 	}
 }
 
+function wget(url) {
+    return new Promise((resolve, reject) => {
+        request(url, { json: true }, (error, response, body) => {
+            if (error) reject(error);
+            if (response === undefined || response.statusCode === undefined ||  response.statusCode != 200) {
+                reject('Invalid status code');
+            }
+            resolve(body);
+        });
+    });
+}
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function get_mypv_json(meter) {
+	try {
+		if(!ACTHOR_serial_number) {
+			await getMyPVRegisters(meter);
+		}
+		if(ACTHOR_serial_number) {
+			const body = await wget("http://"+options.mypvhost+"/data.jsn");
+			if(options.debug) { console.log(ACTHOR_serial_number + "body: "+ body);}
+			return body;
+		} 
+	} catch (error) {
+        	console.error('ERROR:' + error);
+	}
+}
 
 const getMetersValue = async (meters) => {
     try{
@@ -173,7 +205,15 @@ const getMetersValue = async (meters) => {
                 if(options.debug) {
                         console.log("query: " + meter);
                 }
-		await getMyPVRegisters(meter);
+                let state = {};
+                if(options.mode) {
+			state = await getMyPVRegisters(meter);
+		} else {
+			state = await get_mypv_json(meter);
+		}
+		if(ACTHOR_serial_number) {
+			sendMqtt(ACTHOR_serial_number, state);
+		}
 		pos++;
         }
         if(errorCounter>30) {

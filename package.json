@@ -12,6 +12,7 @@
     "binary-parser": "^2.0.2",
     "command-line-args": "^5.2.1",
     "modbus-serial": "^8.0.5",
-    "mqtt": "^4.3.7"
+    "mqtt": "^4.3.7",
+    "request": "^2.88.2"
   }
 }

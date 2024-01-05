@@ -61,7 +61,7 @@ function sendMqtt(id, data) {
         if(options.debug) {
 	        console.log("publish: "+'myPV/' + id, JSON.stringify(data));
 	}
-        MQTTclient.publish('myPV/' + id, JSON.stringify(data));        
+        MQTTclient.publish('myPV/' + id, JSON.stringify(data), { retain: true });
 }
 
 const MyPVPayloadParser_1000 = new Parser()
